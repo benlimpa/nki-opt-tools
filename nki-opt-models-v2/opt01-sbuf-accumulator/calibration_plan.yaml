@@ -1,0 +1,37 @@
+# Sweep plan for opt01. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: 5 paired observations spanning M (≥3), TILE_M (≥2), N (≥2).
+# Both the 3-param model (alpha_dma, alpha_other, alpha_fixed) and the
+# overhead structure are exercised.
+
+- kernel_id: accum_M1024_T128_N512
+  knobs: {M: 1024, TILE_M: 128, N: 512}
+  before: sweep_kernels/accum_M1024_T128_N512_before.py
+  after:  sweep_kernels/accum_M1024_T128_N512_after.py
+  oracle: sweep_kernels/accum_oracle.py
+
+- kernel_id: accum_M2048_T128_N512
+  knobs: {M: 2048, TILE_M: 128, N: 512}
+  before: sweep_kernels/accum_M2048_T128_N512_before.py
+  after:  sweep_kernels/accum_M2048_T128_N512_after.py
+  oracle: sweep_kernels/accum_oracle.py
+
+- kernel_id: accum_M512_T128_N512
+  knobs: {M: 512, TILE_M: 128, N: 512}
+  before: sweep_kernels/accum_M512_T128_N512_before.py
+  after:  sweep_kernels/accum_M512_T128_N512_after.py
+  oracle: sweep_kernels/accum_oracle.py
+
+- kernel_id: accum_M1024_T128_N1024
+  knobs: {M: 1024, TILE_M: 128, N: 1024}
+  before: sweep_kernels/accum_M1024_T128_N1024_before.py
+  after:  sweep_kernels/accum_M1024_T128_N1024_after.py
+  oracle: sweep_kernels/accum_oracle.py
+
+- kernel_id: accum_M1024_T64_N512
+  knobs: {M: 1024, TILE_M: 64, N: 512}
+  before: sweep_kernels/accum_M1024_T64_N512_before.py
+  after:  sweep_kernels/accum_M1024_T64_N512_after.py
+  oracle: sweep_kernels/accum_oracle.py

@@ -1,0 +1,36 @@
+# Sweep plan for opt11. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary TILE_N at M=1024,N=512 (2 points) plus 3 off-axis variants.
+# Both knobs (M, TILE_N_current) covered with ≥2 distinct values.
+
+- kernel_id: mm_M1024_K128_N512_T128
+  knobs: {M: 1024, K: 128, N: 512, TILE_N_current: 128}
+  before: sweep_kernels/mm_M1024_K128_N512_T128_before.py
+  after:  sweep_kernels/mm_M1024_K128_N512_T128_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K128_N512_T256
+  knobs: {M: 1024, K: 128, N: 512, TILE_N_current: 256}
+  before: sweep_kernels/mm_M1024_K128_N512_T256_before.py
+  after:  sweep_kernels/mm_M1024_K128_N512_T256_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M512_K128_N512_T128
+  knobs: {M: 512, K: 128, N: 512, TILE_N_current: 128}
+  before: sweep_kernels/mm_M512_K128_N512_T128_before.py
+  after:  sweep_kernels/mm_M512_K128_N512_T128_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M2048_K128_N512_T128
+  knobs: {M: 2048, K: 128, N: 512, TILE_N_current: 128}
+  before: sweep_kernels/mm_M2048_K128_N512_T128_before.py
+  after:  sweep_kernels/mm_M2048_K128_N512_T128_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K128_N256_T128
+  knobs: {M: 1024, K: 128, N: 256, TILE_N_current: 128}
+  before: sweep_kernels/mm_M1024_K128_N256_T128_before.py
+  after:  sweep_kernels/mm_M1024_K128_N256_T128_after.py
+  oracle: sweep_kernels/mm_oracle.py

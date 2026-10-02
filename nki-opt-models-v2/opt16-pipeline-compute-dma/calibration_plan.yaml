@@ -1,0 +1,35 @@
+# Sweep plan for opt16. Each entry profiles a (before, after) pair and appends
+# rows to calibration.csv. To add a calibration point, drop a parameterized
+# matmul kernel + oracle into sweep_kernels/ and add an entry here.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage rule (per WORKFLOW_V2.md): at least 2 paired observations per knob.
+# This means at least 2 distinct n_tiles values for opt16. The opt16 model also
+# benefits from off-axis points varying TILE_M and dtype to verify robustness.
+
+# --- Primary knob sweep: vary n_tiles -------------------------------------
+- kernel_id: mm_K128_M512_N512_fp32
+  knobs: {n_tiles: 4, tile_m: 128, dtype: fp32}
+  before: sweep_kernels/mm_K128_M512_N512_fp32_before.py
+  after:  sweep_kernels/mm_K128_M512_N512_fp32_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_K128_M1024_N512_fp32
+  knobs: {n_tiles: 8, tile_m: 128, dtype: fp32}
+  before: sweep_kernels/mm_K128_M1024_N512_fp32_before.py
+  after:  sweep_kernels/mm_K128_M1024_N512_fp32_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_K128_M2048_N512_fp32
+  knobs: {n_tiles: 16, tile_m: 128, dtype: fp32}
+  before: sweep_kernels/mm_K128_M2048_N512_fp32_before.py
+  after:  sweep_kernels/mm_K128_M2048_N512_fp32_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+# --- Off-axis: vary dtype --------------------------------------------------
+- kernel_id: mm_K128_M1024_N512_bf16
+  knobs: {n_tiles: 8, tile_m: 128, dtype: bf16}
+  before: sweep_kernels/mm_K128_M1024_N512_bf16_before.py
+  after:  sweep_kernels/mm_K128_M1024_N512_bf16_after.py
+  oracle: sweep_kernels/mm_oracle.py

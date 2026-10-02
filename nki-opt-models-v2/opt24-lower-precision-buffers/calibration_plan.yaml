@@ -1,0 +1,35 @@
+# Sweep plan for opt24. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary N (compute scale) at P=128 (3 points) plus 2 off-axis P/intermediates.
+
+- kernel_id: poly_P128_N32768
+  knobs: {P: 128, N: 32768, TILE_N: 512, n_fp32_intermediates: 5}
+  before: sweep_kernels/poly_P128_N32768_before.py
+  after:  sweep_kernels/poly_P128_N32768_after.py
+  oracle: sweep_kernels/poly_oracle.py
+
+- kernel_id: poly_P128_N65536
+  knobs: {P: 128, N: 65536, TILE_N: 512, n_fp32_intermediates: 5}
+  before: sweep_kernels/poly_P128_N65536_before.py
+  after:  sweep_kernels/poly_P128_N65536_after.py
+  oracle: sweep_kernels/poly_oracle.py
+
+- kernel_id: poly_P128_N131072
+  knobs: {P: 128, N: 131072, TILE_N: 512, n_fp32_intermediates: 5}
+  before: sweep_kernels/poly_P128_N131072_before.py
+  after:  sweep_kernels/poly_P128_N131072_after.py
+  oracle: sweep_kernels/poly_oracle.py
+
+- kernel_id: poly_P64_N131072
+  knobs: {P: 64, N: 131072, TILE_N: 512, n_fp32_intermediates: 5}
+  before: sweep_kernels/poly_P64_N131072_before.py
+  after:  sweep_kernels/poly_P64_N131072_after.py
+  oracle: sweep_kernels/poly_oracle.py
+
+- kernel_id: poly_P128_N16384
+  knobs: {P: 128, N: 16384, TILE_N: 512, n_fp32_intermediates: 5}
+  before: sweep_kernels/poly_P128_N16384_before.py
+  after:  sweep_kernels/poly_P128_N16384_after.py
+  oracle: sweep_kernels/poly_oracle.py

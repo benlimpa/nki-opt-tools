@@ -1,0 +1,47 @@
+# Per-(source, kernel) overrides. Optional registry that augments disk-based
+# kernel discovery. Kernels not listed here are active (`skip_default = false`)
+# and untagged.
+#
+# Source-of-truth for *which kernels exist* is the filesystem (the `.py` files
+# under each source's kernel directory — see SOURCE_PATHS in bench_runs/common.py).
+# This file is purely for overrides and documentation.
+#
+# Schema — each entry is keyed `[<source>.<kernel>]`:
+#   skip_default = true|false   # omit from "all" expansions (still selectable by name)
+#   tags         = [...]        # informational grouping
+#   notes        = "..."        # free text — visible in `bench-status` output
+#
+# When a matrix cell uses an explicit kernel list (e.g. kernels = ["gqa_full"]
+# or per-source dict values), `skip_default` is NOT applied — listing a kernel
+# by name is an explicit opt-in. `skip_default` only filters the "all" form.
+
+
+# ---- nkibench ----
+
+[nkibench.gqa_full]
+skip_default = true
+notes        = "profile timed out (legacy note from run-agent-bench-docker.sh)"
+
+[nkibench.matmul]
+tags = ["matmul"]
+
+[nkibench.bmm]
+tags = ["matmul"]
+
+[nkibench.transpose_matmul]
+tags = ["matmul"]
+
+[nkibench.matmul_add_rmsnorm]
+tags = ["matmul"]
+
+[nkibench.rmsnorm_matmul]
+tags = ["matmul"]
+
+[nkibench.add_rmsnorm_matmul]
+tags = ["matmul"]
+
+
+# ---- reference ----
+
+[reference.matmul]
+tags = ["matmul"]

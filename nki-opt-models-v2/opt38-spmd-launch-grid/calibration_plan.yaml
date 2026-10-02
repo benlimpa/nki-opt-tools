@@ -1,0 +1,39 @@
+# Sweep plan for opt38. Each entry profiles a (before, after) pair where
+# the before kernel is launched without an SPMD grid (G=1 implicit) and
+# the after kernel is launched as kernel[G](...) with G > 1.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary outer_loop_count (n_iters = M / TILE_P) at G=2 plus a couple
+# of off-axis shapes. Both knobs (outer_loop_count, target_grid_size) covered
+# with ≥2 distinct values by including a G=4 variant.
+
+- kernel_id: add_M2048_N512_G2
+  knobs: {outer_loop_count: 16, target_grid_size: 2}
+  before: sweep_kernels/add_M2048_N512_G2_before.py
+  after:  sweep_kernels/add_M2048_N512_G2_after.py
+  oracle: sweep_kernels/add_oracle.py
+
+- kernel_id: add_M4096_N512_G2
+  knobs: {outer_loop_count: 32, target_grid_size: 2}
+  before: sweep_kernels/add_M4096_N512_G2_before.py
+  after:  sweep_kernels/add_M4096_N512_G2_after.py
+  oracle: sweep_kernels/add_oracle.py
+
+- kernel_id: add_M8192_N512_G2
+  knobs: {outer_loop_count: 64, target_grid_size: 2}
+  before: sweep_kernels/add_M8192_N512_G2_before.py
+  after:  sweep_kernels/add_M8192_N512_G2_after.py
+  oracle: sweep_kernels/add_oracle.py
+
+- kernel_id: add_M2048_N1024_G2
+  knobs: {outer_loop_count: 16, target_grid_size: 2}
+  before: sweep_kernels/add_M2048_N1024_G2_before.py
+  after:  sweep_kernels/add_M2048_N1024_G2_after.py
+  oracle: sweep_kernels/add_oracle.py
+
+- kernel_id: add_M4096_N512_G4
+  knobs: {outer_loop_count: 32, target_grid_size: 4}
+  before: sweep_kernels/add_M4096_N512_G4_before.py
+  after:  sweep_kernels/add_M4096_N512_G4_after.py
+  oracle: sweep_kernels/add_oracle.py

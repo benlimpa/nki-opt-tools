@@ -1,0 +1,5 @@
+ARG BASE=public.ecr.aws/neuron/pytorch-inference-neuronx:2.9.0-neuronx-py312-sdk2.28.0-ubuntu24.04
+FROM ${BASE}
+
+RUN apt-get update && apt-get install -y nodejs npm && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @openai/codex@0.133.0

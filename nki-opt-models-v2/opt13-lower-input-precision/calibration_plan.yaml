@@ -1,0 +1,36 @@
+# Sweep plan for opt13. Each entry profiles a (before=fp32, after=bf16) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: 5 paired observations varying M, K, N to span different
+# read/write byte fractions (and DMA / TensorE / other balance).
+
+- kernel_id: mm_M512_K512_N512
+  knobs: {M: 512, K: 512, N: 512}
+  before: sweep_kernels/mm_M512_K512_N512_before.py
+  after:  sweep_kernels/mm_M512_K512_N512_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M512_K512_N256
+  knobs: {M: 512, K: 512, N: 256}
+  before: sweep_kernels/mm_M512_K512_N256_before.py
+  after:  sweep_kernels/mm_M512_K512_N256_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K512_N512
+  knobs: {M: 1024, K: 512, N: 512}
+  before: sweep_kernels/mm_M1024_K512_N512_before.py
+  after:  sweep_kernels/mm_M1024_K512_N512_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M512_K1024_N512
+  knobs: {M: 512, K: 1024, N: 512}
+  before: sweep_kernels/mm_M512_K1024_N512_before.py
+  after:  sweep_kernels/mm_M512_K1024_N512_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K1024_N256
+  knobs: {M: 1024, K: 1024, N: 256}
+  before: sweep_kernels/mm_M1024_K1024_N256_before.py
+  after:  sweep_kernels/mm_M1024_K1024_N256_after.py
+  oracle: sweep_kernels/mm_oracle.py

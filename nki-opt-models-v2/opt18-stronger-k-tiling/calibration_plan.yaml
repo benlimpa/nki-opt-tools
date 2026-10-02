@@ -1,0 +1,36 @@
+# Sweep plan for opt18. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: tile_k_ratio ∈ {2, 4, 8} on the v1 shape, plus 2 off-axis
+# smaller-shape variants. 5 paired observations for the 4-param fit.
+
+- kernel_id: mm_M1024_K512_N512_T16
+  knobs: {K: 512, TILE_K_current: 16}
+  before: sweep_kernels/mm_M1024_K512_N512_T16_before.py
+  after:  sweep_kernels/mm_M1024_K512_N512_T16_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K512_N512_T32
+  knobs: {K: 512, TILE_K_current: 32}
+  before: sweep_kernels/mm_M1024_K512_N512_T32_before.py
+  after:  sweep_kernels/mm_M1024_K512_N512_T32_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M1024_K512_N512_T64
+  knobs: {K: 512, TILE_K_current: 64}
+  before: sweep_kernels/mm_M1024_K512_N512_T64_before.py
+  after:  sweep_kernels/mm_M1024_K512_N512_T64_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M512_K256_N256_T32
+  knobs: {K: 256, TILE_K_current: 32}
+  before: sweep_kernels/mm_M512_K256_N256_T32_before.py
+  after:  sweep_kernels/mm_M512_K256_N256_T32_after.py
+  oracle: sweep_kernels/mm_oracle.py
+
+- kernel_id: mm_M512_K256_N256_T64
+  knobs: {K: 256, TILE_K_current: 64}
+  before: sweep_kernels/mm_M512_K256_N256_T64_before.py
+  after:  sweep_kernels/mm_M512_K256_N256_T64_after.py
+  oracle: sweep_kernels/mm_oracle.py

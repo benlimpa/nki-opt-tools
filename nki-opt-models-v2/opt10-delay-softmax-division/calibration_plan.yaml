@@ -1,0 +1,36 @@
+# Sweep plan for opt10. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary n_tiles via N_total and TILE_N. ≥3 distinct n_tiles values
+# so the 3-param fit is well-determined.
+
+- kernel_id: sm_P128_N512_T128
+  knobs: {P: 128, N_total: 512, TILE_N: 128, n_tiles: 4}
+  before: sweep_kernels/sm_P128_N512_T128_before.py
+  after:  sweep_kernels/sm_P128_N512_T128_after.py
+  oracle: sweep_kernels/sm_oracle.py
+
+- kernel_id: sm_P128_N1024_T128
+  knobs: {P: 128, N_total: 1024, TILE_N: 128, n_tiles: 8}
+  before: sweep_kernels/sm_P128_N1024_T128_before.py
+  after:  sweep_kernels/sm_P128_N1024_T128_after.py
+  oracle: sweep_kernels/sm_oracle.py
+
+- kernel_id: sm_P128_N2048_T128
+  knobs: {P: 128, N_total: 2048, TILE_N: 128, n_tiles: 16}
+  before: sweep_kernels/sm_P128_N2048_T128_before.py
+  after:  sweep_kernels/sm_P128_N2048_T128_after.py
+  oracle: sweep_kernels/sm_oracle.py
+
+- kernel_id: sm_P128_N512_T64
+  knobs: {P: 128, N_total: 512, TILE_N: 64, n_tiles: 8}
+  before: sweep_kernels/sm_P128_N512_T64_before.py
+  after:  sweep_kernels/sm_P128_N512_T64_after.py
+  oracle: sweep_kernels/sm_oracle.py
+
+- kernel_id: sm_P128_N1024_T256
+  knobs: {P: 128, N_total: 1024, TILE_N: 256, n_tiles: 4}
+  before: sweep_kernels/sm_P128_N1024_T256_before.py
+  after:  sweep_kernels/sm_P128_N1024_T256_after.py
+  oracle: sweep_kernels/sm_oracle.py

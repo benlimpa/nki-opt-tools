@@ -1,0 +1,64 @@
+# Approach tags — the methodology the agent operated under.
+#
+# An approach is the strategy used to guide the agent toward optimizations:
+# prompt + workflow + supporting files (autocompletion menu, pre-explored
+# guide, model-prediction artifacts, etc.). It's what the agent SAW and DID
+# at run time. Two approaches differ if either the workflow or the underlying
+# data/prompt the agent consumed differs.
+#
+# Each approach can have multiple variants. A variant captures an iteration
+# on how that approach is realized — prompt rewordings, model parameter
+# updates, applicability-signal tweaks, opt-list trims. Variants of the same
+# approach share a canonical comparison axis but stay distinguishable in the
+# coverage matrix and run manifest.
+#
+# There is NO default_variant. Every reference to an approach (matrix.toml,
+# CLI args, run metadata, run-id) must be `name@variant`. Bare names are
+# rejected. Duplicate (name, variant) pairs within a single matrix cell are
+# rejected.
+#
+# Historical note: this dimension was called "menu" pre-2026-05-18. The name
+# was a misnomer — it's not literally a list of items the agent picks from;
+# it's the whole guidance methodology. Renamed to "approach" along with the
+# introduction of variants. The `menu_version` field inside
+# agent_features.toml (opt37/opt38) is unrelated — that one really IS a menu
+# of optimization techniques the agent picks from.
+
+[no_info.v1]
+description = "Baseline. Agent receives only NKI docs, no optimization hints."
+
+[no_info.v2]
+description = "Same as v1 plus a no-parallel-NKI-tools warning in the prompt (defense-in-depth alongside the codex_v2_opt38_lncfix agent_features flock)."
+
+[autocomp.v1]
+description = "Heuristic-driven autocompletion suggestions."
+
+[autocomp.v2]
+description = "Same as v1 plus the no-parallel-NKI-tools warning in the prompt."
+
+[pre_explored.v1]
+description = "Hand-curated optimization guide from historical experiments."
+
+[pre_explored.v2]
+description = "Same as v1 plus the no-parallel-NKI-tools warning in the prompt."
+
+[model_guided.v1]
+description = "Performance model v1 predictions of which optimizations to apply."
+
+[model_guided_v2.v1]
+description = "Performance model v2 predictions with per-optimization knobs. Prompt instructs agent to select the highest-speedup applicable optimization without an extrapolation warning."
+
+[model_guided_v2.v2]
+description = "Softened prompt: agent treats predictions with scrutiny (models may predict false speedups or incorrectly mark opts inapplicable), and writes its own optimization plan rather than mechanically selecting the top-ranked entry."
+
+[model_guided_v2.v3]
+description = "Adds profile-driven applicability gates (spill_save_bytes for fusion opts 5/7/17/21/30; dma_packet_count vs hbm_write_bytes for opt33; t_active_us/t_total_us for opt38), tightens opt31 to require a tile-body tensor_reduce + degrade silently on producer-consumer pipelines, restores opt14/opt32/opt35 from false-negatives by widening or cross-checking knobs, ships opt20 (algebraic scalar fusion) as a new model, and updates the prompt to (a) apply all jointly-applicable opts with predicted speedup > 1.10x rather than the single top entry and (b) consult `nki-optimizations/optimization-quick-reference.md` for opts that have no v2 model when no surfaced opt is profitable."
+
+[model_guided_v2.v4]
+description = "Same step3 prompt body as v3 (predictor changes unchanged); adds the no-parallel-NKI-tools warning in the shared template. Kept step3 identical so v3-vs-v4 isolates the prompt nudge's effect on the NRT race rate."
+
+[model_guided_v2.v5]
+description = "Flattens hardware profile metrics for prediction, applies a DMA-share guard to opt38, includes the strided-shard reference pattern, and requests oracle-shape and bench3 checks. Includes serialized NKI tool execution guidance."
+
+[model_guided_v2.v6]
+description = "Extends v5 with a free-form optimization attempt when neither the predictions nor the catalog identifies an applicable optimization. Retains the other v5 prompt sections."

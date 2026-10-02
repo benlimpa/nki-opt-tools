@@ -1,0 +1,40 @@
+"""
+Sweep variant — opt16 BEFORE: serial load/compute/store per M-tile.
+M=1024, K=128, N=512, TILE_M=128, dtype=fp32.
+"""
+import nki
+import nki.isa as nisa
+import nki.language as nl
+
+M = 1024
+K = 128
+N = 512
+TILE_M = 128
+TILE_K = 128
+TILE_N = 512
+DTYPE = "fp32"
+_NL_DTYPE = nl.float32
+
+
+@nki.jit(platform_target="trn1")
+def matmul_serial(lhsT, rhs):
+    result = nl.ndarray((M, N), dtype=_NL_DTYPE, buffer=nl.shared_hbm)
+
+    rhs_tile = nl.ndarray((TILE_K, TILE_N), dtype=_NL_DTYPE, buffer=nl.sbuf)
+    nisa.dma_copy(dst=rhs_tile, src=rhs[0:TILE_K, 0:TILE_N])
+
+    lhsT_tile = nl.ndarray((TILE_K, TILE_M), dtype=_NL_DTYPE, buffer=nl.sbuf)
+    res_sbuf = nl.ndarray((TILE_M, TILE_N), dtype=_NL_DTYPE, buffer=nl.sbuf)
+
+    for m in nl.sequential_range(M // TILE_M):
+        nisa.dma_copy(dst=lhsT_tile,
+                      src=lhsT[0:TILE_K, m * TILE_M:(m + 1) * TILE_M])
+
+        res_psum = nl.ndarray((TILE_M, TILE_N), dtype=nl.float32, buffer=nl.psum)
+        nisa.nc_matmul(dst=res_psum, stationary=lhsT_tile, moving=rhs_tile)
+        nisa.activation(dst=res_sbuf, op=nl.copy, data=res_psum)
+
+        nisa.dma_copy(dst=result[m * TILE_M:(m + 1) * TILE_M, 0:TILE_N],
+                      src=res_sbuf)
+
+    return result

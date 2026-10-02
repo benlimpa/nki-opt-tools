@@ -1,0 +1,29 @@
+# Sweep plan for opt37. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary num_iters at D0=D3=128 (3 points), plus one off-axis shape.
+
+- kernel_id: transpose_D128x128_iters50
+  knobs: {num_iters: 50, D0: 128, D3: 128}
+  before: sweep_kernels/transpose_D128x128_iters50_before.py
+  after:  sweep_kernels/transpose_D128x128_iters50_after.py
+  oracle: sweep_kernels/transpose_oracle.py
+
+- kernel_id: transpose_D128x128_iters100
+  knobs: {num_iters: 100, D0: 128, D3: 128}
+  before: sweep_kernels/transpose_D128x128_iters100_before.py
+  after:  sweep_kernels/transpose_D128x128_iters100_after.py
+  oracle: sweep_kernels/transpose_oracle.py
+
+- kernel_id: transpose_D128x128_iters200
+  knobs: {num_iters: 200, D0: 128, D3: 128}
+  before: sweep_kernels/transpose_D128x128_iters200_before.py
+  after:  sweep_kernels/transpose_D128x128_iters200_after.py
+  oracle: sweep_kernels/transpose_oracle.py
+
+- kernel_id: transpose_D128x64_iters100
+  knobs: {num_iters: 100, D0: 128, D3: 64}
+  before: sweep_kernels/transpose_D128x64_iters100_before.py
+  after:  sweep_kernels/transpose_D128x64_iters100_after.py
+  oracle: sweep_kernels/transpose_oracle.py

@@ -1,0 +1,30 @@
+"""
+Sweep variant — opt03 AFTER: element-wise A+B with TILE_P=128 (full partition).
+M=1024, N=1024, TILE_P=128 → n_iters = M / 128 = 8.
+"""
+import nki
+import nki.isa as nisa
+import nki.language as nl
+
+M = 1024
+N = 1024
+TILE_P = 128
+
+
+@nki.jit(platform_target="trn1")
+def add_full_tiles(a, b):
+    c = nl.ndarray((M, N), dtype=nl.float32, buffer=nl.shared_hbm)
+
+    for i in nl.sequential_range(M // TILE_P):
+        a_tile = nl.ndarray((TILE_P, N), dtype=nl.float32, buffer=nl.sbuf)
+        nisa.dma_copy(dst=a_tile, src=a[i * TILE_P:(i + 1) * TILE_P, 0:N])
+
+        b_tile = nl.ndarray((TILE_P, N), dtype=nl.float32, buffer=nl.sbuf)
+        nisa.dma_copy(dst=b_tile, src=b[i * TILE_P:(i + 1) * TILE_P, 0:N])
+
+        c_tile = nl.ndarray((TILE_P, N), dtype=nl.float32, buffer=nl.sbuf)
+        nisa.tensor_tensor(dst=c_tile, data1=a_tile, data2=b_tile, op=nl.add)
+
+        nisa.dma_copy(dst=c[i * TILE_P:(i + 1) * TILE_P, 0:N], src=c_tile)
+
+    return c

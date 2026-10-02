@@ -1,0 +1,108 @@
+# Coverage matrix: declares the desired set of (agent_features × measurement_method
+# × model × source × kernel × approach@variant) cells, and how many replicates
+# each needs.
+#
+# Each [[cell]] requires a unique `name` — a short identifier (letters/digits/
+# `_`/`-`, must start alnum) used as the cell handle in `bench-status --cell`,
+# queue-file section headers, and report CSV filenames. Two cells may share
+# every other field (e.g. different `kernels`) as long as their names differ.
+#
+# Approach entries are ALWAYS `name@variant`. There is no default variant —
+# every reference is explicit. Duplicate `(name, variant)` pairs within a
+# single cell are rejected.
+#
+# `bench-status` diffs this against the manifest of actual runs and reports:
+#   - filled cells (target replicates met, all measured under target method)
+#   - "needs more agent runs" (insufficient replicates — expensive to fill)
+#   - "needs measurement" (replicates exist but lack the target method's
+#     measurement record — cheap to fill via measure.py, no agent quota)
+#   - missing entirely
+
+default_target_runs = 1
+
+# Reasoning effort forwarded to the agent (codex `model_reasoning_effort`; ignored
+# by claude). Per-cell `reasoning_effort` overrides this. The agent type itself
+# (codex vs claude) is NOT a cell field — it is derived from the cell's
+# `agent_features` tag (its `agent` entry in agent_features.toml).
+default_reasoning_effort = "medium"
+
+# The `kernels` field on each [[cell]] accepts:
+#   kernels = "all"                                     # all on-disk kernels per source, minus
+#                                                      # those flagged skip_default in kernels.toml
+#   kernels = ["matmul", "rope"]                       # explicit list; each name MUST exist on disk
+#                                                      # in EVERY source listed in `sources`
+#   kernels = { reference = ["matmul"], nkibench = "all" }
+#                                                      # per-source — keys must equal `sources` exactly
+# Source-of-truth for the on-disk kernel set is benchmark-opt/<source-dir>/*.py.
+# Skip flags / tags / notes live in kernels.toml (optional overrides).
+
+# Canonical comparison: Codex / GPT-5.4 / 4 approaches / 4 sources, on the
+# latest agent_features and measurement method. Both model_guided_v2 variants
+# are listed: v1 (historical prompt — 23 runs already exist) and v2 (softened
+# prompt — to be filled).
+[[cell]]
+name               = "codex_main"
+agent_features     = "codex_v2_opt38"
+measurement_method = "bench3_geomean"
+model              = "gpt-5.4"
+reasoning_effort   = "medium"
+sources            = ["reference", "nl_to_nki", "nki_library", "nkibench"]
+kernels            = "all"
+approaches         = ["no_info@v1", "autocomp@v1", "pre_explored@v1", "model_guided_v2@v1", "model_guided_v2@v2", "model_guided_v2@v4"]
+target_runs        = 1
+
+[[cell]]
+name               = "codex_lncfix"
+agent_features     = "codex_v2_opt38_lncfix"
+measurement_method = "bench3_geomean"
+model              = "gpt-5.4"
+reasoning_effort   = "medium"
+sources            = ["reference", "nl_to_nki", "nki_library", "nkibench", "compiler_gen"]
+kernels            = "all"
+approaches         = ["no_info@v2", "autocomp@v2", "pre_explored@v2", "model_guided_v2@v5", "model_guided_v2@v6"]
+# "model_guided_v2@v4",
+target_runs        = 1
+
+[[cell]]
+name               = "claude_lncfix"
+agent_features     = "claude_v2_opt38_lncfix"
+measurement_method = "bench3_geomean"
+model              = "claude-sonnet-4-6"
+sources            = ["reference", "nl_to_nki", "nki_library", "nkibench", "compiler_gen"]
+kernels            = "all"
+approaches         = ["no_info@v2", "autocomp@v2", "model_guided_v2@v5", "model_guided_v2@v6"]
+target_runs        = 1
+
+[[cell]]
+name               = "codex_compiler_gen"
+agent_features     = "codex_v2_opt38_lncfix"
+measurement_method = "bench3_geomean"
+model              = "gpt-5.4"
+sources            = ["compiler_gen"]
+kernels            = "all"
+approaches         = ["no_info@v2", "autocomp@v2", "model_guided_v2@v5", "model_guided_v2@v6"]
+target_runs        = 1
+
+
+# Same comparison, on the older agent_features cohort with the same measurement
+# method (bench3 reprofile of pre-opt38 runs). Useful for ablating "what did
+# adding opt38 buy us."
+# [[cell]]
+# agent_features     = "codex_v1_opt37"
+# measurement_method = "bench3_geomean"
+# model              = "gpt-5.4"
+# sources            = ["reference", "nl_to_nki", "nki_library", "nkibench"]
+# kernels            = "all"
+# approaches         = ["no_info@v1", "autocomp@v1", "pre_explored@v1", "model_guided@v1"]
+# target_runs        = 1
+
+# Original methodology snapshot (pre-bench3) for the codex_v1_opt37 cohort,
+# preserved so we can reproduce the hand-edited canonical CSV.
+# [[cell]]
+# agent_features     = "codex_v1_opt37"
+# measurement_method = "single_shape_meanratio"
+# model              = "gpt-5.4"
+# sources            = ["reference", "nl_to_nki", "nki_library", "nkibench"]
+# kernels            = "all"
+# approaches         = ["no_info@v1", "autocomp@v1", "pre_explored@v1", "model_guided@v1"]
+# target_runs        = 1

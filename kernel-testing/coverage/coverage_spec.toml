@@ -1,0 +1,701 @@
+# coverage_spec.toml — formalization of kernel-optimization-coverage.md
+#
+# One entry per modeled optimization (nki-opt-models-v2). Each entry turns the
+# prose "Coverage Model" column into COUNTABLE bins, and records the correctness
+# oracle + equivalence class + structural monitor decided in oracle-design.md.
+#
+# This file is the single source of truth for BOTH coverage counting and input
+# generation. It contains no hardware dependency; spectra.py loads it offline.
+#
+# Per-opt fields:
+#   name               human label
+#   equivalence_class  A_bitexact | B_fp_reorder | C_precision   (oracle-design.md three classes)
+#   oracle             torch_reference | before_after | torch_fp32_reference
+#   oracle_anchor      (optional) secondary oracle run on a few shapes for shared-family bugs
+#   tolerance          tight | depth_scaled | dtype_aware | "atol=..,rtol=.."
+#   compare_region     full | valid_only         (opt06 computes only the valid region)
+#   multi_core         true if any variant launches >1 LNC (affects launch, not oracle)
+#   params             knob names (from the opt's Knobs dataclass)
+#   structural_monitor profile counter that must move if the transform fired
+#   structural_expected  drop_to_zero | decrease | increase | ratio
+#   sample_params      real param dicts from sweep_kernels/ (used by offline partition tests)
+#
+# Each [[optNN.dimensions]] is one coverage axis:
+#   name      axis label
+#   source    sweep  (varied by existing sweep_kernels) | new (correctness axis we are ADDING)
+#   buckets   inline tables {name, predicate, [critical=true]}
+#             predicate is a Python expression over `params`; exactly one bucket
+#             per dimension must match any valid param assignment (a partition).
+#             critical=true marks a boundary/negative bin that is a CORRECTNESS
+#             hazard (not merely a predictor precondition).
+
+schema_version = 1
+
+# ============================================================ opt01
+[opt01]
+name = "SBUF Accumulator"
+equivalence_class = "A_bitexact"
+oracle = "before_after"          # reduction: before/after share accumulation order -> atol~0
+oracle_anchor = "torch_reference"  # accum_oracle.py: ref=sum of tiles, atol=1e-3
+tolerance = "tight"
+compare_region = "full"
+multi_core = false
+params = ["M", "TILE_M", "N"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {M=512, TILE_M=128, N=512}, {M=1024, TILE_M=128, N=512},
+  {M=1024, TILE_M=64, N=512}, {M=2048, TILE_M=128, N=512}, {M=1024, TILE_M=128, N=1024},
+]
+[[opt01.dimensions]]
+name = "loop_count"
+source = "sweep"
+buckets = [
+  {name = "single_loop", predicate = "M <= 2*TILE_M", critical = true},
+  {name = "multi_loop",  predicate = "M >  2*TILE_M"},
+]
+[[opt01.dimensions]]
+name = "accumulator_width"
+source = "sweep"
+buckets = [
+  {name = "narrow", predicate = "N <= 512"},
+  {name = "wide",   predicate = "N >  512"},
+]
+
+# ============================================================ opt03
+[opt03]
+name = "Full Partition Utilization"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # add_oracle.py: elementwise, atol=1e-5 (torch bit-exact)
+tolerance = "atol=1e-5,rtol=1e-5"
+compare_region = "full"
+multi_core = false
+params = ["M", "TILE_P_current"]
+structural_monitor = "vector_instr_count"
+structural_expected = "decrease"
+sample_params = [
+  {M=512, TILE_P_current=128}, {M=512, TILE_P_current=64},
+  {M=1024, TILE_P_current=16}, {M=1024, TILE_P_current=32}, {M=1024, TILE_P_current=64},
+]
+[[opt03.dimensions]]
+name = "partition_tile"
+source = "sweep"
+buckets = [
+  {name = "p_le_16",  predicate = "TILE_P_current <= 16"},
+  {name = "p_32",     predicate = "TILE_P_current == 32"},
+  {name = "p_64",     predicate = "16 < TILE_P_current < 128 and TILE_P_current != 32"},
+  {name = "p_128_noop", predicate = "TILE_P_current >= 128", critical = true},
+]
+
+# ============================================================ opt05
+[opt05]
+name = "Loop Fusion (2 loops)"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # fuse_oracle.py: ref=x passthrough, atol=1e-4
+tolerance = "atol=1e-4,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles", "n_intermediates"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {n_tiles=4, n_intermediates=1}, {n_tiles=8, n_intermediates=1},
+  {n_tiles=16, n_intermediates=1},
+]
+[[opt05.dimensions]]
+name = "tile_count"
+source = "sweep"
+buckets = [
+  {name = "few",  predicate = "n_tiles <= 4"},
+  {name = "many", predicate = "n_tiles >  4"},
+]
+
+# ============================================================ opt06
+[opt06]
+name = "Skip Masked Compute"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # scale_oracle.py: ref compared on valid rows only, atol=1e-5
+tolerance = "atol=1e-5,rtol=1e-5"
+compare_region = "valid_only"
+multi_core = false
+params = ["total_tiles", "valid_tiles"]
+structural_monitor = "vector_instr_count"
+structural_expected = "ratio"     # drop by valid_tiles/total_tiles
+sample_params = [
+  {total_tiles=10, valid_tiles=1}, {total_tiles=10, valid_tiles=5},
+  {total_tiles=10, valid_tiles=9}, {total_tiles=10, valid_tiles=10},
+]
+[[opt06.dimensions]]
+name = "valid_ratio"
+source = "sweep"
+buckets = [
+  {name = "sparse",   predicate = "valid_tiles*10 <= total_tiles*2"},   # <=20%
+  {name = "half",     predicate = "total_tiles*2 < valid_tiles*10 < total_tiles*8"},
+  {name = "dense",    predicate = "total_tiles*8 <= valid_tiles*10 < total_tiles*10"}, # 80-99%
+  {name = "full_noop", predicate = "valid_tiles >= total_tiles", critical = true},
+]
+
+# ============================================================ opt07
+[opt07]
+name = "Loop Fusion (HBM intermediates)"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # pipe_oracle.py: ref=x, atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-3"
+compare_region = "full"
+multi_core = false
+params = ["n_intermediates", "n_tiles"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {n_intermediates=1, n_tiles=8}, {n_intermediates=2, n_tiles=8},
+  {n_intermediates=3, n_tiles=8}, {n_intermediates=2, n_tiles=4},
+]
+[[opt07.dimensions]]
+name = "intermediate_count"
+source = "sweep"
+buckets = [
+  {name = "one",   predicate = "n_intermediates <= 1", critical = true},   # boundary == opt05
+  {name = "two",   predicate = "n_intermediates == 2"},
+  {name = "many",  predicate = "n_intermediates >= 3"},
+]
+[[opt07.dimensions]]
+name = "tile_count"
+source = "sweep"
+buckets = [
+  {name = "few",  predicate = "n_tiles <= 4"},
+  {name = "many", predicate = "n_tiles >  4"},
+]
+
+# ============================================================ opt10
+[opt10]
+name = "Delay Softmax Division"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # sm_oracle.py: ref=torch.softmax(x), atol=1e-5
+tolerance = "atol=1e-5,rtol=1e-5"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [ {n_tiles=2}, {n_tiles=4}, {n_tiles=8} ]
+[[opt10.dimensions]]
+name = "column_tiles"
+source = "sweep"
+buckets = [
+  {name = "two",   predicate = "n_tiles <= 2", critical = true},
+  {name = "four",  predicate = "n_tiles == 4"},
+  {name = "many",  predicate = "n_tiles >= 5"},
+]
+
+# ============================================================ opt11
+[opt11]
+name = "nc_matmul Large Moving Tiles"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # mm_oracle.py: ref=A@B, atol=1e-2
+tolerance = "depth_scaled"
+compare_region = "full"
+multi_core = false
+params = ["M", "K", "N", "TILE_N_current"]
+structural_monitor = "tensor_instr_count"
+structural_expected = "decrease"
+sample_params = [
+  {M=512, K=128, N=512, TILE_N_current=128}, {M=1024, K=128, N=512, TILE_N_current=128},
+  {M=1024, K=128, N=512, TILE_N_current=256}, {M=1024, K=128, N=256, TILE_N_current=128},
+]
+[[opt11.dimensions]]
+name = "moving_tile"
+source = "sweep"
+buckets = [
+  {name = "tn_128",     predicate = "TILE_N_current <= 128"},
+  {name = "tn_256",     predicate = "128 < TILE_N_current < 512"},
+  {name = "tn_512_noop", predicate = "TILE_N_current >= 512", critical = true},
+]
+
+# ============================================================ opt12
+[opt12]
+name = "PSUM Accumulation Group"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # mm_oracle.py: ref=A@B, atol=1e-2
+tolerance = "depth_scaled"
+compare_region = "full"
+multi_core = false
+params = ["n_m_tiles", "n_k_tiles"]
+structural_monitor = "vector_instr_count"
+structural_expected = "decrease"
+sample_params = [
+  {n_m_tiles=4, n_k_tiles=2}, {n_m_tiles=4, n_k_tiles=4},
+  {n_m_tiles=2, n_k_tiles=2}, {n_m_tiles=8, n_k_tiles=2},
+]
+[[opt12.dimensions]]
+name = "k_tile_count"
+source = "sweep"
+buckets = [
+  {name = "single_k", predicate = "n_k_tiles <= 1", critical = true},  # nothing to group
+  {name = "few_k",    predicate = "2 <= n_k_tiles <= 3"},
+  {name = "many_k",   predicate = "n_k_tiles >= 4"},
+]
+
+# ============================================================ opt13
+[opt13]
+name = "Lower Input Precision"
+equivalence_class = "C_precision"
+oracle = "torch_fp32_reference"   # before takes fp32 inputs, after takes bf16 -> compare both vs fp32 ref
+tolerance = "dtype_aware"
+compare_region = "full"
+multi_core = false
+params = ["M", "K", "N", "dtype_ratio", "value_regime"]
+structural_monitor = "hbm_read_bytes"
+structural_expected = "ratio"     # ~ dtype_ratio
+sample_params = [
+  {M=512, K=512, N=256, dtype_ratio=0.5, value_regime="normal"},
+  {M=1024, K=512, N=512, dtype_ratio=0.5, value_regime="normal"},
+  {M=512, K=1024, N=512, dtype_ratio=0.5, value_regime="normal"},
+]
+[[opt13.dimensions]]
+name = "precision"
+source = "sweep"
+buckets = [
+  {name = "bf16", predicate = "dtype_ratio == 0.5"},
+  {name = "int8", predicate = "dtype_ratio <= 0.25"},
+]
+[[opt13.dimensions]]
+name = "value_regime"
+source = "new"
+buckets = [
+  {name = "small",         predicate = "value_regime == 'small'"},
+  {name = "normal",        predicate = "value_regime == 'normal'"},
+  {name = "near_overflow", predicate = "value_regime == 'near_overflow'", critical = true},
+]
+
+# ============================================================ opt14
+[opt14]
+name = "Double Buffering"
+equivalence_class = "A_bitexact"   # scheduling only; before/after bit-exact
+oracle = "before_after"
+oracle_anchor = "torch_reference"  # mm_oracle.py atol=1e-2
+tolerance = "tight"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles", "bottleneck"]
+structural_monitor = "t_active_us"
+structural_expected = "increase"   # active-time fraction rises (overlap)
+sample_params = [
+  {n_tiles=4, bottleneck="dma"}, {n_tiles=8, bottleneck="dma"},
+  {n_tiles=4, bottleneck="compute"},
+]
+[[opt14.dimensions]]
+name = "tile_count"
+source = "sweep"
+buckets = [
+  {name = "too_few", predicate = "n_tiles < 2", critical = true},  # nothing to overlap
+  {name = "enough",  predicate = "n_tiles >= 2"},
+]
+[[opt14.dimensions]]
+name = "bottleneck"
+source = "new"
+buckets = [
+  {name = "dma_bound",     predicate = "bottleneck == 'dma'"},
+  {name = "compute_bound", predicate = "bottleneck == 'compute'"},
+]
+
+# ============================================================ opt16
+[opt16]
+name = "Full Compute-DMA Pipeline"
+equivalence_class = "A_bitexact"
+oracle = "before_after"
+oracle_anchor = "torch_reference"  # mm_oracle.py
+tolerance = "tight"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles"]
+structural_monitor = "t_active_us"
+structural_expected = "increase"
+sample_params = [ {n_tiles=4}, {n_tiles=8}, {n_tiles=16} ]
+[[opt16.dimensions]]
+name = "pipeline_depth"
+source = "sweep"
+buckets = [
+  {name = "too_shallow", predicate = "n_tiles < 3", critical = true},
+  {name = "pipelined",   predicate = "n_tiles >= 3"},
+]
+
+# ============================================================ opt17
+[opt17]
+name = "SBUF Instead of HBM"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # sbuf_oracle.py: ref=x, atol=1e-4
+tolerance = "atol=1e-4,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["has_private_hbm_intermediate", "n_intermediates", "n_tiles"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {has_private_hbm_intermediate=true, n_intermediates=1, n_tiles=8},
+  {has_private_hbm_intermediate=true, n_intermediates=2, n_tiles=8},
+  {has_private_hbm_intermediate=true, n_intermediates=2, n_tiles=4},
+]
+[[opt17.dimensions]]
+name = "intermediate_count"
+source = "sweep"
+buckets = [
+  {name = "one",  predicate = "n_intermediates <= 1"},
+  {name = "many", predicate = "n_intermediates >= 2"},
+]
+[[opt17.dimensions]]
+name = "applicable"
+source = "sweep"
+buckets = [
+  {name = "has_spill",  predicate = "has_private_hbm_intermediate == True"},
+  {name = "no_spill_noop", predicate = "has_private_hbm_intermediate == False", critical = true},
+]
+
+# ============================================================ opt18
+[opt18]
+name = "Stronger K-Tiling"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # mm_oracle.py: ref=lhsT.T@rhs, atol=1e-2
+tolerance = "depth_scaled"
+compare_region = "full"
+multi_core = false
+params = ["K", "TILE_K_current"]
+structural_monitor = "tensor_instr_count"
+structural_expected = "ratio"     # ~ 128/TILE_K_current
+sample_params = [
+  {K=512, TILE_K_current=16}, {K=512, TILE_K_current=32},
+  {K=512, TILE_K_current=64}, {K=256, TILE_K_current=32},
+]
+[[opt18.dimensions]]
+name = "k_tile"
+source = "sweep"
+buckets = [
+  {name = "tk_16",      predicate = "TILE_K_current <= 16"},
+  {name = "tk_32",      predicate = "TILE_K_current == 32"},
+  {name = "tk_64",      predicate = "32 < TILE_K_current < 128"},
+  {name = "tk_128_noop", predicate = "TILE_K_current >= 128", critical = true},
+]
+[[opt18.dimensions]]
+name = "k_divisibility"
+source = "new"
+buckets = [
+  {name = "k_divisible",  predicate = "K % TILE_K_current == 0"},
+  {name = "k_remainder",  predicate = "K % TILE_K_current != 0", critical = true},
+]
+
+# ============================================================ opt20
+[opt20]
+name = "Algebraic Scalar Fusion"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # as_oracle.py atol=1e-4
+tolerance = "atol=1e-4,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["n_consecutive_ops", "n_tiles"]
+structural_monitor = "scalar_instr_count"   # not in KernelProfile -> see note in spectra.py
+structural_expected = "decrease"
+sample_params = [
+  {n_consecutive_ops=2, n_tiles=4}, {n_consecutive_ops=3, n_tiles=4},
+  {n_consecutive_ops=4, n_tiles=4}, {n_consecutive_ops=2, n_tiles=8},
+]
+[[opt20.dimensions]]
+name = "chain_length"
+source = "sweep"
+buckets = [
+  {name = "pair",  predicate = "n_consecutive_ops <= 2", critical = true},
+  {name = "triple", predicate = "n_consecutive_ops == 3"},
+  {name = "long",  predicate = "n_consecutive_ops >= 4"},
+]
+
+# ============================================================ opt21
+[opt21]
+name = "Fuse Single Loop (small spill)"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # ms_oracle.py atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles", "n_loop_boundaries"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {n_tiles=4, n_loop_boundaries=1}, {n_tiles=4, n_loop_boundaries=2},
+  {n_tiles=8, n_loop_boundaries=1},
+]
+[[opt21.dimensions]]
+name = "boundaries"
+source = "sweep"
+buckets = [
+  {name = "one",  predicate = "n_loop_boundaries <= 1"},
+  {name = "many", predicate = "n_loop_boundaries >= 2"},
+]
+
+# ============================================================ opt24
+[opt24]
+name = "Lower-Precision SBUF Buffers"
+equivalence_class = "C_precision"
+oracle = "torch_fp32_reference"   # poly_oracle.py: compare .float() vs fp32 ref, atol=1e-1
+tolerance = "dtype_aware"
+compare_region = "full"
+multi_core = false
+params = ["P", "N", "n_fp32_intermediates", "value_regime"]
+structural_monitor = "dma_packet_count"
+structural_expected = "decrease"
+sample_params = [
+  {P=128, N=16384, n_fp32_intermediates=1, value_regime="normal"},
+  {P=128, N=32768, n_fp32_intermediates=1, value_regime="normal"},
+  {P=128, N=65536, n_fp32_intermediates=1, value_regime="normal"},
+  {P=128, N=131072, n_fp32_intermediates=1, value_regime="normal"},
+]
+[[opt24.dimensions]]
+name = "free_size"
+source = "sweep"
+buckets = [
+  {name = "small",  predicate = "N <= 32768"},
+  {name = "large",  predicate = "N >  32768"},
+]
+[[opt24.dimensions]]
+name = "value_regime"
+source = "new"
+buckets = [
+  {name = "normal",        predicate = "value_regime == 'normal'"},
+  {name = "near_overflow", predicate = "value_regime == 'near_overflow'", critical = true},
+]
+
+# ============================================================ opt30
+[opt30]
+name = "Fuse Reduction + Transform"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # red_oracle.py atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["n_tiles", "n_loop_boundaries"]
+structural_monitor = "spill_save_bytes"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {n_tiles=4, n_loop_boundaries=1}, {n_tiles=8, n_loop_boundaries=1},
+  {n_tiles=16, n_loop_boundaries=1},
+]
+[[opt30.dimensions]]
+name = "tile_count"
+source = "sweep"
+buckets = [
+  {name = "few",  predicate = "n_tiles <= 4"},
+  {name = "many", predicate = "n_tiles >  4"},
+]
+
+# ============================================================ opt31
+[opt31]
+name = "Load Larger Free-Dim Blocks"
+equivalence_class = "A_bitexact"  # min/max reduction: order-independent
+oracle = "torch_reference"        # minmax_oracle.py atol=1e-4
+tolerance = "atol=1e-4,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["N", "TILE_N_current"]
+structural_monitor = "dma_packet_count"
+structural_expected = "decrease"
+sample_params = [
+  {N=512, TILE_N_current=32}, {N=512, TILE_N_current=128},
+  {N=512, TILE_N_current=256}, {N=1024, TILE_N_current=64},
+]
+[[opt31.dimensions]]
+name = "tile_ratio"
+source = "sweep"
+buckets = [
+  {name = "ratio_8plus", predicate = "N // TILE_N_current >= 8"},
+  {name = "ratio_mid",   predicate = "2 < N // TILE_N_current < 8"},
+  {name = "ratio_low",   predicate = "N // TILE_N_current <= 2"},
+]
+[[opt31.dimensions]]
+name = "divisibility"
+source = "new"
+buckets = [
+  {name = "divisible", predicate = "N % TILE_N_current == 0"},
+  {name = "remainder", predicate = "N % TILE_N_current != 0", critical = true},
+]
+
+# ============================================================ opt32
+[opt32]
+name = "Multi-Level Tiling (loop reorder)"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # mm_oracle.py atol=1e-2
+tolerance = "depth_scaled"
+compare_region = "full"
+multi_core = false
+params = ["M", "N", "K", "n_n_tiles"]
+structural_monitor = "hbm_read_bytes"
+structural_expected = "decrease"
+sample_params = [
+  {M=128, N=1024, K=1024, n_n_tiles=2}, {M=128, N=2048, K=1024, n_n_tiles=4},
+  {M=128, N=1024, K=2048, n_n_tiles=2}, {M=128, N=512, K=2048, n_n_tiles=2},
+]
+[[opt32.dimensions]]
+name = "n_tile_count"
+source = "sweep"
+buckets = [
+  {name = "single", predicate = "n_n_tiles <= 1", critical = true},  # no reuse to gain
+  {name = "two",    predicate = "n_n_tiles == 2"},
+  {name = "many",   predicate = "n_n_tiles >= 4"},
+]
+
+# ============================================================ opt33
+[opt33]
+name = "Coalesce Fragmented Stores"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # cs_oracle.py: ref=x*2, atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-4"
+compare_region = "full"
+multi_core = false
+params = ["n_iters", "n_fragments_per_iter", "avg_packet_kib"]
+structural_monitor = "dma_packet_count"
+structural_expected = "decrease"
+sample_params = [
+  {n_iters=32, n_fragments_per_iter=2, avg_packet_kib=4},
+  {n_iters=32, n_fragments_per_iter=4, avg_packet_kib=4},
+  {n_iters=64, n_fragments_per_iter=2, avg_packet_kib=4},
+  {n_iters=128, n_fragments_per_iter=2, avg_packet_kib=4},
+]
+[[opt33.dimensions]]
+name = "fragments"
+source = "sweep"
+buckets = [
+  {name = "two",   predicate = "n_fragments_per_iter <= 2"},
+  {name = "four",  predicate = "n_fragments_per_iter == 4"},
+  {name = "eight", predicate = "n_fragments_per_iter >= 8"},
+]
+[[opt33.dimensions]]
+name = "packet_size"
+source = "new"
+buckets = [
+  {name = "small_coalescable", predicate = "avg_packet_kib < 16"},
+  {name = "large_noop",        predicate = "avg_packet_kib >= 16", critical = true},
+]
+
+# ============================================================ opt34
+[opt34]
+name = "Parallelize 1D Scan"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # cumsum_oracle.py: ref=torch.cumsum, atol=1e-2
+tolerance = "depth_scaled"
+compare_region = "full"
+multi_core = false
+params = ["N_total"]
+structural_monitor = "vector_instr_count"
+structural_expected = "decrease"
+sample_params = [ {N_total=4096}, {N_total=8192}, {N_total=16384}, {N_total=32768} ]
+[[opt34.dimensions]]
+name = "divisibility_128"
+source = "new"
+buckets = [
+  {name = "divisible",  predicate = "N_total % 128 == 0"},
+  {name = "remainder",  predicate = "N_total % 128 != 0", critical = true},
+]
+[[opt34.dimensions]]
+name = "scan_size"
+source = "sweep"
+buckets = [
+  {name = "small", predicate = "N_total <= 8192"},
+  {name = "large", predicate = "N_total >  8192"},
+]
+
+# ============================================================ opt35
+[opt35]
+name = "Specialized / Fused Activation"
+equivalence_class = "B_fp_reorder"
+oracle = "torch_reference"        # tanh_oracle.py: ref=torch.tanh, atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-3"
+compare_region = "full"
+multi_core = false
+params = ["broadcast_dim_N", "fused_ops", "num_outer_iters"]
+structural_monitor = "t_vector_us"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {broadcast_dim_N=256, fused_ops=2, num_outer_iters=50},
+  {broadcast_dim_N=256, fused_ops=1, num_outer_iters=50},
+  {broadcast_dim_N=512, fused_ops=2, num_outer_iters=50},
+  {broadcast_dim_N=256, fused_ops=2, num_outer_iters=100},
+]
+[[opt35.dimensions]]
+name = "outer_iters"
+source = "sweep"
+buckets = [
+  {name = "small", predicate = "num_outer_iters <= 50"},
+  {name = "large", predicate = "num_outer_iters >  50"},
+]
+[[opt35.dimensions]]
+name = "fused_ops"
+source = "sweep"
+buckets = [
+  {name = "one", predicate = "fused_ops <= 1"},
+  {name = "two", predicate = "fused_ops >= 2"},
+]
+
+# ============================================================ opt37
+[opt37]
+name = "DMA Transpose"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # transpose_oracle.py: ref=x.transpose(0,3), atol=1e-3
+tolerance = "atol=1e-3,rtol=1e-3"
+compare_region = "full"
+multi_core = false
+params = ["num_iters", "D0", "D3"]
+structural_monitor = "t_tensor_us"
+structural_expected = "drop_to_zero"
+sample_params = [
+  {num_iters=50, D0=128, D3=128}, {num_iters=100, D0=128, D3=128},
+  {num_iters=200, D0=128, D3=128}, {num_iters=100, D0=128, D3=64},
+]
+[[opt37.dimensions]]
+name = "iteration_scale"
+source = "sweep"
+buckets = [
+  {name = "small", predicate = "num_iters <= 100"},
+  {name = "large", predicate = "num_iters >  100"},
+]
+[[opt37.dimensions]]
+name = "free_dim"
+source = "sweep"
+buckets = [
+  {name = "narrow", predicate = "D3 <= 64"},
+  {name = "wide",   predicate = "D3 >  64"},
+]
+
+# ============================================================ opt38
+[opt38]
+name = "SPMD Launch Grid (Multi-Instance)"
+equivalence_class = "A_bitexact"
+oracle = "torch_reference"        # add_oracle.py: elementwise, atol=1e-5, FULL output
+tolerance = "atol=1e-5,rtol=1e-5"
+compare_region = "full"
+multi_core = true                 # after launches kernel[G] with G>1 LNC
+params = ["outer_loop_count", "target_grid_size", "saturation_pct"]
+structural_monitor = "t_active_us"   # t_active/t_total saturation ratio
+structural_expected = "ratio"
+sample_params = [
+  {outer_loop_count=16, target_grid_size=2, saturation_pct=50},
+  {outer_loop_count=32, target_grid_size=2, saturation_pct=50},
+  {outer_loop_count=32, target_grid_size=4, saturation_pct=50},
+  {outer_loop_count=43, target_grid_size=2, saturation_pct=50},
+]
+[[opt38.dimensions]]
+name = "shard_divisibility"
+source = "new"
+buckets = [
+  {name = "divisible",  predicate = "outer_loop_count % target_grid_size == 0"},
+  {name = "uneven_shard", predicate = "outer_loop_count % target_grid_size != 0", critical = true},
+]
+[[opt38.dimensions]]
+name = "grid_size"
+source = "sweep"
+buckets = [
+  {name = "g2", predicate = "target_grid_size == 2"},
+  {name = "g4", predicate = "target_grid_size >= 4"},
+]
+[[opt38.dimensions]]
+name = "saturation"
+source = "sweep"
+buckets = [
+  {name = "idle",      predicate = "saturation_pct < 95"},
+  {name = "saturated", predicate = "saturation_pct >= 95", critical = true},  # no speedup expected
+]

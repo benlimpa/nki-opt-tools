@@ -1,0 +1,33 @@
+# Sweep plan for opt34. Each entry profiles a (before, after) pair and appends
+# rows to calibration.csv. To add a calibration point, drop a parameterized
+# 1D-cumsum kernel pair + oracle into sweep_kernels/ and add an entry here.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage rule (per WORKFLOW_V2.md): at least 2 paired observations per knob.
+# Single calibrated knob (N_total) — P is a hardware constant fixed at 128.
+# 4 distinct N_total values covers the knob with margin.
+
+- kernel_id: cumsum_N4096
+  knobs: {N_total: 4096}
+  before: sweep_kernels/cumsum_N4096_before.py
+  after:  sweep_kernels/cumsum_N4096_after.py
+  oracle: sweep_kernels/cumsum_oracle.py
+
+- kernel_id: cumsum_N8192
+  knobs: {N_total: 8192}
+  before: sweep_kernels/cumsum_N8192_before.py
+  after:  sweep_kernels/cumsum_N8192_after.py
+  oracle: sweep_kernels/cumsum_oracle.py
+
+- kernel_id: cumsum_N16384
+  knobs: {N_total: 16384}
+  before: sweep_kernels/cumsum_N16384_before.py
+  after:  sweep_kernels/cumsum_N16384_after.py
+  oracle: sweep_kernels/cumsum_oracle.py
+
+- kernel_id: cumsum_N32768
+  knobs: {N_total: 32768}
+  before: sweep_kernels/cumsum_N32768_before.py
+  after:  sweep_kernels/cumsum_N32768_after.py
+  oracle: sweep_kernels/cumsum_oracle.py

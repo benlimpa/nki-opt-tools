@@ -1,0 +1,46 @@
+# Sweep plan for opt31. Each entry profiles a (before, after) pair and appends
+# rows to calibration.csv.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage rule: ≥2 paired observations per knob. Two calibrated knobs
+# (N, TILE_N_current) → ≥4 pairs covering tile_ratio ∈ {2, 4, 8, 16}.
+# 6 paired observations total here.
+
+# --- Vary tile_ratio (M=1024, N=512 fixed) --------------------------------
+- kernel_id: minmax_M1024_N512_T32
+  knobs: {N: 512, TILE_N_current: 32}
+  before: sweep_kernels/minmax_M1024_N512_T32_before.py
+  after:  sweep_kernels/minmax_M1024_N512_T32_after.py
+  oracle: sweep_kernels/minmax_oracle.py
+
+- kernel_id: minmax_M1024_N512_T64
+  knobs: {N: 512, TILE_N_current: 64}
+  before: sweep_kernels/minmax_M1024_N512_T64_before.py
+  after:  sweep_kernels/minmax_M1024_N512_T64_after.py
+  oracle: sweep_kernels/minmax_oracle.py
+
+- kernel_id: minmax_M1024_N512_T128
+  knobs: {N: 512, TILE_N_current: 128}
+  before: sweep_kernels/minmax_M1024_N512_T128_before.py
+  after:  sweep_kernels/minmax_M1024_N512_T128_after.py
+  oracle: sweep_kernels/minmax_oracle.py
+
+- kernel_id: minmax_M1024_N512_T256
+  knobs: {N: 512, TILE_N_current: 256}
+  before: sweep_kernels/minmax_M1024_N512_T256_before.py
+  after:  sweep_kernels/minmax_M1024_N512_T256_after.py
+  oracle: sweep_kernels/minmax_oracle.py
+
+# --- Off-axis: vary N -----------------------------------------------------
+- kernel_id: minmax_M1024_N1024_T64
+  knobs: {N: 1024, TILE_N_current: 64}
+  before: sweep_kernels/minmax_M1024_N1024_T64_before.py
+  after:  sweep_kernels/minmax_M1024_N1024_T64_after.py
+  oracle: sweep_kernels/minmax_oracle.py
+
+- kernel_id: minmax_M512_N256_T32
+  knobs: {N: 256, TILE_N_current: 32}
+  before: sweep_kernels/minmax_M512_N256_T32_before.py
+  after:  sweep_kernels/minmax_M512_N256_T32_after.py
+  oracle: sweep_kernels/minmax_oracle.py

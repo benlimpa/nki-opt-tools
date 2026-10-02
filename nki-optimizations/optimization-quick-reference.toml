@@ -1,0 +1,273 @@
+preamble = '''
+# NKI Optimization Quick Reference
+
+Fast applicability guide for LLM agents selecting optimizations to apply to a kernel.
+For implementation examples, see the per-optimization directories.
+
+Measured speedups are not distributed. Measure on the target SDK and hardware.
+
+---
+
+## Key Applicability Signals
+
+Before selecting optimizations, check these profile and code signals:
+
+| Signal | What it means | Relevant optimizations |
+|--------|--------------|----------------------|
+| `spill_save_bytes > 0` | Accumulator or intermediate spilled to HBM | #01, #05, #07, #17, #21, #30 |
+| `hbm_read_bytes > theoretical_minimum` | Data loaded more times than necessary | #07, #18, #21, #31, #32 |
+| `total_active_time_percent < 80%` | DMA and compute are serialized (idle gaps) | #14, #16 |
+| High DMA%, low compute% | Kernel is DMA-bound | #01, #03, #13, #24, #31, #37 |
+| High TensorE instruction count per output | Small matmul tiles or inefficient tiling | #11, #12, #18 |
+| High VectorE% in a matmul kernel | PSUM evictions going through VectorE | #12 |
+| Explicit Python loop over free dimension | Can be replaced with hardware instruction | #35 |
+| `TILE_P < 128` | Not all partitions active | #03 |
+| `nc_transpose` in kernel | Use DMA transpose instead | #37 |
+| Serial 1D cumsum / prefix-scan loop | Can be parallelized over 128 partitions | #34 |
+| Multi-pass softmax with HBM intermediates | Fuse passes, keep exp in SBUF | #10, #17 |
+| Multiple sequential loops over same tiles | Fuse loops | #07, #21, #30 |
+| `nl.num_programs(0) == 1` and outer loop iterations independent | Kernel runs on 1 NC; outer work is trivially shardable | #38 |
+
+---
+
+## Optimization Quick Reference Table
+
+| # | Name | Speedup | Apply when... | Skip when... |
+|---|------|---------|---------------|--------------|'''
+
+postamble = '''
+---
+
+## Optimizations the Compiler Already Handles (Do NOT Apply)
+
+These were benchmarked and showed no improvement. Applying them manually can
+cause regressions or wasted effort.
+
+| # | Name | Reason compiler handles it |
+|---|------|---------------------------|
+| **02** | Manual loop-invariant DMA hoisting | Compiler LICM hoists automatically |
+| **04** | Manual loop reordering | Compiler reorders loops automatically |
+| **08** | Manual SBUF reuse across iterations | Compiler LICM hoists in most cases; only apply if `hbm_read_bytes > 1×` for the weight |
+| **09** | Hoist scalar computations | Compiler hoists; ScalarE savings < DMA noise |
+| **15** | Fuse reduction into activation | Fused instruction adds bookkeeping overhead that cancels gains |
+| **19** | Reorder ops for cache locality | Compiler already caches tiles in SBUF across passes |
+| **22** | Fuse same-dimension loops | Compiler already fuses; manual fusion regresses 10% |
+| **23** | Load entire row as large SBUF tile | Destroys DMA-compute pipelining the compiler builds with small tiles |
+| **25** | Explicit dtype downcast during ops | Compiler propagates dtypes from buffer declarations automatically |
+| **26** | Pre-transpose to avoid nc_transpose | Not a performance optimization — `nc_transpose` on large tiles is a compile error; use #37 instead |
+| **27** | In-place operation aliasing | Introduces WAW dependencies that block pipelining; regresses 12% |
+| **28** | Streaming softmax (online algorithm) | Compiler already caches x across passes; streaming adds extra compute |
+| **36** | Manual load hoisting | Compiler LICM handles it automatically |
+
+---
+
+## Decision Trees by Kernel Type
+
+### Elementwise / Activation Kernels
+1. `TILE_P < 128`? → **#03** (highest priority, up to 4× gain)
+2. Multiple loops over same tiles? → **#07** loop fusion
+3. Any Python loops over free dimension? → **#35** specialized instructions
+4. Inputs are float32 but bf16 acceptable? → **#24** lower precision buffers
+5. DMA-bound with large output? → **#16** pipeline
+
+### Matmul / nc_matmul Kernels
+1. `TILE_K < 128`? → **#18** (3.3× gain, highest priority)
+2. `TILE_N < 512`? → **#11** (max moving tile)
+3. Using `sequential_range` + VectorE accumulation over K? → **#12** (affine_range PSUM group)
+4. Inputs are float32? → **#13** lower precision
+5. DMA load dominates iteration time? → **#14** double buffering
+6. Both load and store are significant? → **#16** full pipeline
+7. Bias/scale applied post-eviction? → **#29** fused eviction (if compute-bound)
+8. Need to transpose stationary input? → **#37** DMA transpose (not nc_transpose)
+
+### Reduction Kernels (sum, mean, norm, softmax)
+1. `spill_save_bytes > 0`? → accumulator is spilling → **#01** SBUF accumulator
+2. Two-pass with HBM intermediate? → **#07** or **#21** loop fusion
+3. Softmax storing exp to HBM? → **#10** delay division
+4. Two passes: reduce then transform? → **#30** fuse reduction+transformation
+5. Multi-pass over same input? → **#17** SBUF intermediate instead of HBM
+6. Small free-dim tiles with many passes? → **#31** load larger blocks
+
+### Scan / Prefix Kernels
+1. Serial 1D loop using 1/128 partitions? → **#34** parallelize via carry-over
+
+### Any Kernel with Padding
+1. Some tiles are all-padding? → **#06** skip masked computation
+
+### Any Kernel (Multi-Core Parallelism)
+1. Not already launched with an SPMD grid (`nl.num_programs(0) == 1`)? Outer loop has independent iterations? → **#38** SPMD launch grid (sweep grid sizes — typically `G ∈ {1, 2}` — and pick the fastest)'''
+
+[[items]]
+number = 1
+name = "SBUF Accumulator"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Loop accumulates into HBM buffer (`private_hbm`); `spill_save_bytes > 0`"
+skip_when = "Accumulator too large for SBUF"
+
+[[items]]
+number = 3
+name = "Full Partition Utilization"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "`TILE_P < 128`; tensor partition dim ≥ 128"
+skip_when = "Already TILE_P=128"
+
+[[items]]
+number = 5
+name = "Inline Function Fusion"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Separate functions share a tile loop; HBM intermediate between them; `spill_save_bytes > 0`"
+skip_when = "Functions compute on different dimensions/tiles"
+
+[[items]]
+number = 6
+name = "Skip Masked Tiles"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Some tiles are all-padding/invalid; loop iterates all tiles including padding"
+skip_when = "All tiles contain valid data"
+
+[[items]]
+number = 7
+name = "Loop Fusion"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "≥2 loops over same dim; HBM intermediate between them; `spill_save_bytes > 0`"
+skip_when = "Cross-tile data dependencies between loops"
+
+[[items]]
+number = 10
+name = "Delay Softmax Division"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Softmax stores exp tiles to HBM between reduction and normalization passes"
+skip_when = "Reduction and normalization can't be separated"
+
+[[items]]
+number = 11
+name = "nc_matmul Max Moving Tile"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "`TILE_N < 512` with `nc_matmul`; N is 512-aligned"
+skip_when = "Already using TILE_N=512"
+
+[[items]]
+number = 12
+name = "PSUM Accumulation Group"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "K-tile loop uses `sequential_range` + manual VectorE add; high VectorE% in matmul"
+skip_when = "Already using `affine_range` for K-tiles"
+
+[[items]]
+number = 13
+name = "Lower Input Precision"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "nc_matmul inputs are float32; bf16 input precision acceptable; DMA-bound"
+skip_when = "Output precision requires float32 inputs"
+
+[[items]]
+number = 14
+name = "Double Buffering"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Sequential load→compute loop; DMA load is significant; SBUF fits 2× tile"
+skip_when = "Loop has <2 iterations; SBUF too tight"
+
+[[items]]
+number = 16
+name = "Full Compute-DMA Pipeline"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Load + compute + store all significant; `active_time% < 85%`; SBUF fits 2×input + 2×output"
+skip_when = "Output store is negligible"
+
+[[items]]
+number = 17
+name = "SBUF Intermediate (not HBM)"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Two-loop pass: loop1 writes intermediate to HBM; loop2 reads it; `spill_save_bytes > 0`"
+skip_when = "Intermediate too large for SBUF"
+
+[[items]]
+number = 18
+name = "Stronger K-Tiling"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "`TILE_K < 128`; K > 128; rhs same across M-tiles; many nc_matmul calls per M-tile"
+skip_when = "Already TILE_K=128"
+
+[[items]]
+number = 20
+name = "Fuse Dependent Scalar Ops"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Consecutive `tensor_scalar` chain fused via two-op form; kernel is compute-bound"
+skip_when = "Kernel is DMA-bound (gain < 5%)"
+
+[[items]]
+number = 21
+name = "Fuse Producer-Consumer Loops"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Loop A writes HBM; Loop B reads it; same iteration bounds; no other consumers of HBM output"
+skip_when = "Other code needs the HBM intermediate"
+
+[[items]]
+number = 24
+name = "Lower Precision SBUF Buffers"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "SBUF buffers are float32 for bf16 input data; compute-bound; large SBUF footprint"
+skip_when = "Compute requires float32 intermediate precision"
+
+[[items]]
+number = 29
+name = "PSUM Fused Bias Eviction"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Scalar scale/bias applied right after PSUM eviction as separate instruction; compute-bound"
+skip_when = "Kernel is DMA-bound (gain negligible)"
+
+[[items]]
+number = 30
+name = "Fuse Reduction + Transform"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Two-pass: pass1 reduces to HBM (per-row scalar); pass2 reads reduction + input"
+skip_when = "Reduction output needed by other kernels"
+
+[[items]]
+number = 31
+name = "Load Larger Free-Dim Blocks"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "`TILE_N << N`; full tile fits in SBUF; compiler NOT already caching (check `hbm_read_bytes > 1×`)"
+skip_when = "Compiler already loads data only once (verify!)"
+
+[[items]]
+number = 32
+name = "Multi-Level Tiling"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Stationary (A) matrix reloaded per N-tile; multiple N-tiles fit in PSUM"
+skip_when = "A already hoisted by compiler LICM"
+
+[[items]]
+number = 33
+name = "Coalesce Stores"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Many small SBUF→HBM stores to adjacent addresses; high DMA packet count for stores"
+skip_when = "Stores already contiguous and large"
+
+[[items]]
+number = 34
+name = "Parallelize 1D Scan"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Serial cumsum / prefix scan over large 1D array; underutilizing all 128 partitions"
+skip_when = "Operation has non-associative dependencies"
+
+[[items]]
+number = 35
+name = "Specialized Instructions"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Explicit Python loop over free dim for elementwise op; `nisa.activation` or `tensor_scalar` can replace it"
+skip_when = "Operation isn't expressible as a fused instruction"
+
+[[items]]
+number = 37
+name = "DMA Transpose"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "`nc_transpose` used to transpose a tile loaded from HBM"
+skip_when = "Tile is generated in SBUF (no HBM load to intercept)"
+
+[[items]]
+number = 38
+name = "SPMD Launch Grid"
+speedup = "Not distributed; measure on target hardware"
+apply_when = "Kernel is *not* launched with an SPMD grid (`nl.num_programs(0) == 1`); outer loop iterations are independent (no cross-iteration dependencies / running scan / cross-tile accumulator); outer dim divisible by candidate grid sizes; running on multi-NC hardware (sweep `G ∈ {1, 2}` and pick best)"
+skip_when = "Kernel already launched with an SPMD grid (`kernel[G](...)` with G > 1); cross-iteration dependencies; outer dim too small to shard; single-NC target"

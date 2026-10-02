@@ -1,0 +1,36 @@
+# Sweep plan for opt21. Each entry profiles a (two-loop, fused) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: row-wise mean subtraction (small intermediate) at varying
+# (M, N). 5 paired observations, all with n_loop_boundaries=1.
+
+- kernel_id: ms_M512_N1024
+  knobs: {M: 512, N: 1024, n_tiles: 4, n_loop_boundaries: 1}
+  before: sweep_kernels/ms_M512_N1024_before.py
+  after:  sweep_kernels/ms_M512_N1024_after.py
+  oracle: sweep_kernels/ms_oracle.py
+
+- kernel_id: ms_M1024_N1024
+  knobs: {M: 1024, N: 1024, n_tiles: 8, n_loop_boundaries: 1}
+  before: sweep_kernels/ms_M1024_N1024_before.py
+  after:  sweep_kernels/ms_M1024_N1024_after.py
+  oracle: sweep_kernels/ms_oracle.py
+
+- kernel_id: ms_M2048_N1024
+  knobs: {M: 2048, N: 1024, n_tiles: 16, n_loop_boundaries: 1}
+  before: sweep_kernels/ms_M2048_N1024_before.py
+  after:  sweep_kernels/ms_M2048_N1024_after.py
+  oracle: sweep_kernels/ms_oracle.py
+
+- kernel_id: ms_M512_N512
+  knobs: {M: 512, N: 512, n_tiles: 4, n_loop_boundaries: 1}
+  before: sweep_kernels/ms_M512_N512_before.py
+  after:  sweep_kernels/ms_M512_N512_after.py
+  oracle: sweep_kernels/ms_oracle.py
+
+- kernel_id: ms_M1024_N2048
+  knobs: {M: 1024, N: 2048, n_tiles: 8, n_loop_boundaries: 1}
+  before: sweep_kernels/ms_M1024_N2048_before.py
+  after:  sweep_kernels/ms_M1024_N2048_after.py
+  oracle: sweep_kernels/ms_oracle.py

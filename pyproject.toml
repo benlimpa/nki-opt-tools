@@ -1,0 +1,55 @@
+[project]
+name = "nki-opt-tools"
+version = "0.1.19"
+description = "NKI Opt Tools research code for performance-guided NKI kernel optimization and behavioral testing"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.42.49",
+    "graphviz>=0.20",
+    "click>=8.2.1",
+    "ipykernel>=6.30.1",
+    "libcst>=1.8.4",
+    "numpy",
+    "pyyaml>=6",
+    "pandas>=2",
+    "openai>=2.21.0",
+    "pydantic-ai>=1.59.0",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
+    "pyzmq>=27.0.0",
+    "setuptools>=80.9.0",
+    "torch>=2.6.0",
+    "triton>=3.2.0",
+    "botocore[crt]>=1.42.49",
+]
+
+[project.scripts]
+nki-bench = "triton_nki_transpile.bench_kernel:main"
+nki-optimizer = "triton_nki_transpile.optimize_kernel:main"
+nki-profile = "triton_nki_transpile.profile_cli:main"
+# Benchmark-run tooling (was `python -m bench_runs.<name>` when it lived under
+# benchmark-opt/). Data files (matrix.toml, runs/, …) still live in benchmark-opt/.
+bench-status   = "triton_nki_transpile.bench_runs.status:main"
+bench-ingest   = "triton_nki_transpile.bench_runs.ingest:main"
+bench-measure  = "triton_nki_transpile.bench_runs.measure:main"
+bench-manifest = "triton_nki_transpile.bench_runs.manifest:main"
+bench-report   = "triton_nki_transpile.bench_runs.report:main"
+bench-paths    = "triton_nki_transpile.bench_runs.paths:main"
+
+[build-system]
+requires = ["uv_build>=0.8.4,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/triton_nki_transpile/kernels/tests"]
+
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+]
+
+[tool.uv.build-backend]
+module-name = "triton_nki_transpile"

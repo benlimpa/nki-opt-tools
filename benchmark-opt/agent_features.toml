@@ -1,0 +1,57 @@
+# Agent-run feature tags.
+#
+# An agent-run feature describes WHAT THE AGENT SAW during a run:
+# the harness it ran under, the optimization menu it could pick from, and which
+# agent (claude vs codex). These are FROZEN the moment the run executes — they
+# cannot be backported by re-measuring saved kernel code.
+#
+# Two runs are comparable iff they share the same agent_features tag. Reports
+# never silently mix runs from different tags.
+#
+# When you change something the agent sees (new menu options, updated harness,
+# different prompt), add a new tag here and have new runs use it. Old runs keep
+# their old tag.
+
+[codex_v1_opt37]
+# Pre-bench3 codex era (package 0.1.14–0.1.16).
+# Menu does not include opt38 (SPMD launch-grid). Original codex harness.
+harness      = "codex_v1"
+menu_version = "opt37"
+agent        = "codex"
+
+[codex_v2_opt38]
+# Codex 0.1.17+ — added opt38 to the menu and updated the codex harness
+# (commits bc29ce4, 83af92d).
+harness      = "codex_v2"
+menu_version = "opt38"
+agent        = "codex"
+
+[claude_v1_opt37]
+# Claude on package 0.1.14–0.1.16. Menu without opt38.
+harness      = "claude_v1"
+menu_version = "opt37"
+agent        = "claude"
+
+[claude_v2_opt38]
+# Claude on package 0.1.17+. Menu with opt38.
+harness      = "claude_v2"
+menu_version = "opt38"
+agent        = "claude"
+
+[codex_v2_opt38_lncfix]
+# Same as codex_v2_opt38 but with `python-in-venv` wrapped in
+# flock(/tmp/nki_lnc.lock) so concurrent agent commands can't race on
+# /dev/neuron0 during kernel[2] launches. Adds the `nki_lnc_serialize`
+# field; the harness exports NKI_LNC_SERIALIZE=1 into the container, which
+# python-in-venv picks up. This serializes device initialization across
+# concurrent shell tool calls.
+harness           = "codex_v2"
+menu_version      = "opt38"
+agent             = "codex"
+nki_lnc_serialize = true
+
+[claude_v2_opt38_lncfix]
+harness           = "claude_v2"
+menu_version      = "opt38"
+agent             = "claude"
+nki_lnc_serialize = true

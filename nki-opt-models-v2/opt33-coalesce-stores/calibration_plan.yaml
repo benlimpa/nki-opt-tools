@@ -1,0 +1,36 @@
+# Sweep plan for opt33. Each entry profiles a (fragmented, coalesced) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary n_iters (loop count) and n_fragments_per_iter (number
+# of small stores merged into 1). 5 paired observations.
+
+- kernel_id: cs_iters64_frag2
+  knobs: {n_iters: 64, n_fragments_per_iter: 2}
+  before: sweep_kernels/cs_iters64_frag2_before.py
+  after:  sweep_kernels/cs_iters64_frag2_after.py
+  oracle: sweep_kernels/cs_oracle.py
+
+- kernel_id: cs_iters32_frag2
+  knobs: {n_iters: 32, n_fragments_per_iter: 2}
+  before: sweep_kernels/cs_iters32_frag2_before.py
+  after:  sweep_kernels/cs_iters32_frag2_after.py
+  oracle: sweep_kernels/cs_oracle.py
+
+- kernel_id: cs_iters128_frag2
+  knobs: {n_iters: 128, n_fragments_per_iter: 2}
+  before: sweep_kernels/cs_iters128_frag2_before.py
+  after:  sweep_kernels/cs_iters128_frag2_after.py
+  oracle: sweep_kernels/cs_oracle.py
+
+- kernel_id: cs_iters64_frag4
+  knobs: {n_iters: 64, n_fragments_per_iter: 4}
+  before: sweep_kernels/cs_iters64_frag4_before.py
+  after:  sweep_kernels/cs_iters64_frag4_after.py
+  oracle: sweep_kernels/cs_oracle.py
+
+- kernel_id: cs_iters32_frag4
+  knobs: {n_iters: 32, n_fragments_per_iter: 4}
+  before: sweep_kernels/cs_iters32_frag4_before.py
+  after:  sweep_kernels/cs_iters32_frag4_after.py
+  oracle: sweep_kernels/cs_oracle.py

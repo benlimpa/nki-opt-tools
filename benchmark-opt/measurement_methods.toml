@@ -1,0 +1,24 @@
+# Measurement method tags.
+#
+# A measurement method describes HOW THE SAVED KERNEL CODE IS TIMED — purely a
+# post-hoc property of running a profiler against optimized.py. The kernel code
+# itself is fixed; you can re-measure it with as many methods as you want.
+#
+# Each run's metadata.json carries a list of measurement records, each tagged
+# with one of these names. `measure.py --method <tag>` walks runs/ and appends
+# a new record under <tag> without touching existing records.
+
+[single_shape_meanratio]
+# The original methodology used pre-bench3 (pre-commit b065cac):
+# - profiler.profile() against a single fixed input shape
+# - speedup = baseline_ms / optimized_ms (single ratio)
+profiling    = "single_shape"
+speedup_calc = "mean_ratio"
+
+[bench3_geomean]
+# Current methodology since commit b065cac (introduced for 0.1.17):
+# - profiler.profile_bench3() compiles+profiles 3 input shapes, returns mean
+# - speedup = geomean of per-case ratios baseline[i] / optimized[i]
+# Requires the kernel's oracle file to define a bench3() function.
+profiling    = "bench3"
+speedup_calc = "geomean_per_case"

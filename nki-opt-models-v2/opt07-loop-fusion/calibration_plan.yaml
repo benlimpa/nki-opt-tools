@@ -1,0 +1,36 @@
+# Sweep plan for opt07. Each entry profiles a (before, after) pair.
+#
+# Run:  python ../tools/run_calibration_sweep.py --plan calibration_plan.yaml
+#
+# Coverage: vary n_intermediates ∈ {1, 2, 3} at M=1024,N=512 (3 points)
+# plus 2 off-axis points at n_intermediates=2.
+
+- kernel_id: pipe_M1024_N512_int1
+  knobs: {M: 1024, N: 512, TILE_P: 128, n_intermediates: 1, n_tiles: 8}
+  before: sweep_kernels/pipe_M1024_N512_int1_before.py
+  after:  sweep_kernels/pipe_M1024_N512_int1_after.py
+  oracle: sweep_kernels/pipe_oracle.py
+
+- kernel_id: pipe_M1024_N512_int2
+  knobs: {M: 1024, N: 512, TILE_P: 128, n_intermediates: 2, n_tiles: 8}
+  before: sweep_kernels/pipe_M1024_N512_int2_before.py
+  after:  sweep_kernels/pipe_M1024_N512_int2_after.py
+  oracle: sweep_kernels/pipe_oracle.py
+
+- kernel_id: pipe_M1024_N512_int3
+  knobs: {M: 1024, N: 512, TILE_P: 128, n_intermediates: 3, n_tiles: 8}
+  before: sweep_kernels/pipe_M1024_N512_int3_before.py
+  after:  sweep_kernels/pipe_M1024_N512_int3_after.py
+  oracle: sweep_kernels/pipe_oracle.py
+
+- kernel_id: pipe_M2048_N512_int2
+  knobs: {M: 2048, N: 512, TILE_P: 128, n_intermediates: 2, n_tiles: 16}
+  before: sweep_kernels/pipe_M2048_N512_int2_before.py
+  after:  sweep_kernels/pipe_M2048_N512_int2_after.py
+  oracle: sweep_kernels/pipe_oracle.py
+
+- kernel_id: pipe_M1024_N1024_int2
+  knobs: {M: 1024, N: 1024, TILE_P: 128, n_intermediates: 2, n_tiles: 8}
+  before: sweep_kernels/pipe_M1024_N1024_int2_before.py
+  after:  sweep_kernels/pipe_M1024_N1024_int2_after.py
+  oracle: sweep_kernels/pipe_oracle.py
