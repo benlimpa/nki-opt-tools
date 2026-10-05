@@ -99,3 +99,7 @@ For `model-guided-v2`, generate calibration fits first and provide a fresh basel
 `kernel-testing/coverage/grounding.py` derives exact, partial-tile, and below-tile input regions from source structure. `campaign.py` plans covering shapes. `kernel_oracle.py` compares baseline, candidate, and reference behavior on device. Coverage means coverage of the modeled partitions; it is not a proof over all possible inputs.
 
 Device campaigns and the repair loop require local before/after runs with their oracles.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE). Third-party notices and license text are preserved in `third-party/`.

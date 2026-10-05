@@ -3,6 +3,7 @@ name = "nki-opt-tools"
 version = "0.1.19"
 description = "NKI Opt Tools research code for performance-guided NKI kernel optimization and behavioral testing"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.42.49",
